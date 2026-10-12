@@ -1,6 +1,3 @@
-// Copyright (c) 2026 Witalis Domitrz <witekdomitrz@gmail.com>
-// AGPL License
-
 //! Mosaic conversion and the browser application, both written in Rust.
 //! The native binary is a conversion CLI and nothing more; publishing the
 //! studio is `cargo build`'s job (see `build.rs`). On wasm the wasm-bindgen
@@ -26,6 +23,9 @@ pub use render::{
     build_rows, build_rows_order, flat_svg, guide_svg, guide_svg_order, parts_csv, stud_svg,
 };
 
+/// # Errors
+///
+/// Returns an error when `palette_id` names no palette in [`palettes`].
 pub fn convert(image: &Raster, palette_id: &str, options: &Options) -> Result<Mosaic, String> {
     let tiles = palette::all()
         .iter()

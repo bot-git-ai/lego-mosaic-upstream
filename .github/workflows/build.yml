@@ -3,12 +3,12 @@
 
 name: build
 
-# Two builds, in order, because there are two targets. The order is not a
-# convenience: `build.rs` derives the service worker's cache version from the
-# bytes of every other file in `dist/`, and the wasm is one of them. Building
-# the host side first would pin the cache to whatever the previous build left
-# behind, and the job would ship a studio whose cache never invalidates. So
-# this runs exactly what AGENTS.md documents, in the order it documents it.
+# Two builds, in order, because there are two targets. The order is the one
+# AGENTS.md documents: `build.rs` derives the service worker's cache version
+# from the shell sources it owns plus the worker's own template (the wasm is
+# never read), and its wasm-target run writes nothing, so the host build
+# finishing last is what leaves `dist/` complete -- nine files, with the
+# cache version made from the sources being published.
 #
 # What the job is for: the wasm and the bindings are build output and are never
 # committed, so nothing in the repository proves they still build, or that the
@@ -140,8 +140,10 @@ jobs:
         run: |
           set -eu
           # `build.rs` adds the six files it owns and derives the service
-          # worker's cache version. It must run after the bindings step: the
-          # version is hashed from what the previous step wrote.
+          # worker's cache version from the shell sources it writes plus the
+          # worker's own template. It runs after the bindings step so the
+          # site ends up complete: the wasm step's `build.rs` run writes
+          # nothing (see `main`'s target guard), so this run must be last.
           #
           # The touch is not redundant. `build.rs` runs on every build that
           # needs it, and it writes into the source tree, not into OUT_DIR, so

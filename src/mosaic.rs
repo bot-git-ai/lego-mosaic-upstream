@@ -1,6 +1,3 @@
-// Copyright (c) 2026 Witalis Domitrz <witekdomitrz@gmail.com>
-// AGPL License
-
 //! Deterministic, browser-independent RGBA → palette-stud conversion.
 //! Exact fractional area resampling (including alpha over white) avoids
 //! aliasing. Sharp uses sub-stud coverage and protects dark line work;
@@ -105,6 +102,10 @@ impl Default for HueRemap {
 /// sanitized in `convert`, not by the caller; NaN/∞ take neutral defaults.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default)]
+#[allow(
+    clippy::struct_excessive_bools,
+    reason = "these are the user-facing conversion switches; grouping them is the domain"
+)]
 pub struct Options {
     pub width: usize,
     pub height: usize,
@@ -258,6 +259,11 @@ pub struct Stages {
 /// Run the pipeline, keeping the intermediate images. The mosaic comes from
 /// the same code path as `convert()`, which delegates here, so the previews
 /// can never drift from the actual result.
+#[allow(
+    clippy::too_many_lines,
+    reason = "one pipeline whose stages must stay in lockstep; splitting it would scatter the invariants"
+)]
+#[must_use]
 pub fn stages(image: &Raster, palette: &[TileColor], options: &Options) -> Stages {
     let o = options.sanitized();
     let palette = excluded_palette(palette, &o.excluded);
@@ -319,7 +325,13 @@ pub fn stages(image: &Raster, palette: &[TileColor], options: &Options) -> Stage
         if cache[key] == usize::MAX {
             // Use a canonical bin center instead of the first encountered
             // sample so reversing the source never changes color decisions.
-            let canonical = Srgb::new((rgb.r & 252) | 2, (rgb.g & 252) | 2, (rgb.b & 252) | 2);
+            // Bin center: mask to 6 bits per channel, then set the two
+            // middle bits of each 4-value bin.
+            let canonical = Srgb::new(
+                (rgb.r & 0xFC) | 0x02,
+                (rgb.g & 0xFC) | 0x02,
+                (rgb.b & 0xFC) | 0x02,
+            );
             cache[key] = nearest(
                 &preprocess_both(canonical, &o, primary_target, secondary_target),
                 &labs,
@@ -386,7 +398,6 @@ fn raster_from_srgb(rgb: &[Srgb], width: usize, height: usize) -> Raster {
     }
 }
 
-/// The mosaic as a plain image: each stud in its exact final tile color.
 fn raster_from_tiles(grid: &[usize], palette: &[TileColor], o: &Options) -> Raster {
     let mut pixels = Vec::with_capacity(grid.len() * 4);
     for &index in grid {
@@ -528,7 +539,7 @@ pub(crate) fn viewport(
 /// these options samples — `viewport` in the Crop interpretation, whatever
 /// `fit` currently says. This is the inverse data the browser needs to draw
 /// a draggable frame over the original image; the window position is the
-/// clamped, effective one (a crop_x past the edge reports the edge).
+/// clamped, effective one (a `crop_x` past the edge reports the edge).
 pub fn crop_frame(image: &Raster, out_w: usize, out_h: usize, o: &Options) -> (f64, f64, f64, f64) {
     let sw = image.width as f64;
     let sh = image.height as f64;
@@ -600,7 +611,7 @@ fn linear(v: f64) -> f64 {
     }
 }
 fn encoded(v: f64) -> f64 {
-    if v <= 0.0031308 {
+    if v <= 0.003_130_8 {
         v * 12.92
     } else {
         1.055 * v.powf(1.0 / 2.4) - 0.055
@@ -710,22 +721,25 @@ fn remap_target(h: &HueRemap, palette: &[Lab]) -> Option<Lab> {
     }
 }
 
+// `max` is by construction one of r, g, b, so the branch tests are identity
+// comparisons, not float approximations.
+#[allow(clippy::float_cmp)]
 fn hue_saturation(rgb: Srgb) -> (f64, f64) {
-    let [r, g, b] = [rgb.r, rgb.g, rgb.b].map(|n| f64::from(n) / 255.0);
+    let [r, g, b] = [rgb.r, rgb.g, rgb.b].map(|channel| f64::from(channel) / 255.0);
     let max = r.max(g).max(b);
     let min = r.min(g).min(b);
-    let d = max - min;
-    if d < 1e-9 {
+    let delta = max - min;
+    if delta < 1e-9 {
         return (0.0, 0.0);
     }
-    let h = if max == r {
-        (g - b) / d
+    let hue = if max == r {
+        (g - b) / delta
     } else if max == g {
-        (b - r) / d + 2.0
+        (b - r) / delta + 2.0
     } else {
-        (r - g) / d + 4.0
+        (r - g) / delta + 4.0
     };
-    ((h * 60.0).rem_euclid(360.0), d / max)
+    ((hue * 60.0).rem_euclid(360.0), delta / max)
 }
 
 #[cfg(test)]
@@ -797,20 +811,22 @@ fn lab_to_linear(lab: Lab) -> [f64; 3] {
             (t - 4.0 / 29.0) * 108.0 / 841.0
         }
     };
-    let x = 0.95047 * inv(fx);
+    let x = 0.950_47 * inv(fx);
     let y = inv(fy);
-    let z = 1.08883 * inv(fz);
+    let z = 1.088_83 * inv(fz);
     [
-        3.2404542 * x - 1.5371385 * y - 0.4985314 * z,
-        -0.9692660 * x + 1.8760108 * y + 0.0415560 * z,
-        0.0556434 * x - 0.2040259 * y + 1.0572252 * z,
+        3.240_454_2 * x - 1.537_138_5 * y - 0.498_531_4 * z,
+        -0.969_266_0 * x + 1.876_010_8 * y + 0.041_556_0 * z,
+        0.055_643_4 * x - 0.204_025_9 * y + 1.057_225_2 * z,
     ]
 }
 
-fn linear_to_lab(c: [f64; 3]) -> Lab {
-    let x = (0.4124564 * c[0] + 0.3575761 * c[1] + 0.1804375 * c[2]) / 0.95047;
-    let y = 0.2126729 * c[0] + 0.7151522 * c[1] + 0.0721750 * c[2];
-    let z = (0.0193339 * c[0] + 0.1191920 * c[1] + 0.9503041 * c[2]) / 1.08883;
+fn linear_to_lab(linear: [f64; 3]) -> Lab {
+    let x_n =
+        (0.412_456_4 * linear[0] + 0.357_576_1 * linear[1] + 0.180_437_5 * linear[2]) / 0.950_47;
+    let y_n = 0.212_672_9 * linear[0] + 0.715_152_2 * linear[1] + 0.072_175_0 * linear[2];
+    let z_n =
+        (0.019_333_9 * linear[0] + 0.119_192_0 * linear[1] + 0.950_304_1 * linear[2]) / 1.088_83;
     let f = |t: f64| {
         if t > 216.0 / 24389.0 {
             t.cbrt()
@@ -819,13 +835,17 @@ fn linear_to_lab(c: [f64; 3]) -> Lab {
         }
     };
     Lab {
-        l: 116.0 * f(y) - 16.0,
-        a: 500.0 * (f(x) - f(y)),
-        b: 200.0 * (f(y) - f(z)),
+        l: 116.0 * f(y_n) - 16.0,
+        a: 500.0 * (f(x_n) - f(y_n)),
+        b: 200.0 * (f(y_n) - f(z_n)),
     }
 }
 
 #[allow(clippy::too_many_arguments)]
+#[allow(
+    clippy::too_many_lines,
+    reason = "median/threshold pooling is one pass over one array; splitting it would not shorten it"
+)]
 fn pool(
     hi: &[Lab],
     indices: &[usize],
@@ -1217,10 +1237,10 @@ mod tests {
     fn crop_frame_matches_viewport_for_default_centered_crop() {
         // Cover at zoom 1: frame spans the full short axis, centered on the
         // long axis — exactly what resampling will sample.
-        let (w, h) = (400usize, 200usize);
-        let (x, y, fw, fh) = cover_frame(w, h, 48, 48);
-        assert!((fw - 200.0).abs() < 1e-9, "{fw}");
-        assert!((fh - 200.0).abs() < 1e-9);
+        let (img_w, img_h) = (400usize, 200usize);
+        let (x, y, frame_w, frame_h) = cover_frame(img_w, img_h, 48, 48);
+        assert!((frame_w - 200.0).abs() < 1e-9, "{frame_w}");
+        assert!((frame_h - 200.0).abs() < 1e-9);
         assert!((y - 0.0).abs() < 1e-9);
         assert!((x - 100.0).abs() < 1e-9);
         // And the forward direction from those options reproduces it.
@@ -1231,7 +1251,7 @@ mod tests {
             zoom: 1.0,
             ..Options::default()
         };
-        let image = solid(w, h, [255, 0, 0, 255]);
+        let image = solid(img_w, img_h, [255, 0, 0, 255]);
         let (vx, vy, vw, vh) = crop_frame(&image, 48, 48, &o);
         assert!((vx - 100.0).abs() < 1e-9 && (vy - 0.0).abs() < 1e-9);
         assert!((vw - 200.0).abs() < 1e-9 && (vh - 200.0).abs() < 1e-9);
@@ -1249,9 +1269,9 @@ mod tests {
         };
         let frame = crop_frame(&image, 48, 48, &o);
         let back = crop_frame_options(&image, 48, 48, &Options::default(), frame);
-        assert!((back.crop_x - o.crop_x).abs() < 1e-9, "{:?}", back);
+        assert!((back.crop_x - o.crop_x).abs() < 1e-9, "{back:?}");
         assert!((back.crop_y - o.crop_y).abs() < 1e-9);
-        assert!((back.zoom - o.zoom).abs() < 1e-9, "{:?}", back);
+        assert!((back.zoom - o.zoom).abs() < 1e-9, "{back:?}");
         assert_eq!(back.fit, FitMode::Crop);
         // Same round trip at an off-center pan (still realizable: the
         // un-clamped window fits inside the image at this zoom).
@@ -1264,7 +1284,7 @@ mod tests {
         };
         let frame2 = crop_frame(&image, 48, 48, &o2);
         let back2 = crop_frame_options(&image, 48, 48, &Options::default(), frame2);
-        assert!((back2.crop_x - o2.crop_x).abs() < 1e-9, "{:?}", back2);
+        assert!((back2.crop_x - o2.crop_x).abs() < 1e-9, "{back2:?}");
         assert!((back2.crop_y - o2.crop_y).abs() < 1e-9);
         assert!((back2.zoom - o2.zoom).abs() < 1e-9);
     }
@@ -1291,6 +1311,9 @@ mod tests {
     }
 
     #[test]
+    // The full-frame input back-computes zoom exactly 1.0 by construction;
+    // the test pins that exactness.
+    #[allow(clippy::float_cmp)]
     fn crop_frame_options_snaps_full_frame_to_zoom_one() {
         // A frame equal to the whole (non-square) image is exactly the
         // default cover view: zoom must report 1.0, centered fractions.
@@ -1576,6 +1599,9 @@ mod tests {
     }
 
     #[test]
+    // serde parses the same JSON literals the defaults are written with, so
+    // both directions land on the identical f64 values.
+    #[allow(clippy::float_cmp)]
     fn defaults_are_square_neutral_and_json_partial() {
         let o: Options =
             serde_json::from_str(r#"{"gamma":1.2,"hue_remap":{"mode":"grayscale"}}"#).unwrap();
@@ -1603,6 +1629,9 @@ mod tests {
     }
 
     #[test]
+    // The fixture's dimensions put the zoomed viewport on exactly
+    // representable coordinates (2.5 cells); the test pins that exactness.
+    #[allow(clippy::float_cmp)]
     fn crop_position_and_zoom_select_actual_source_region() {
         let mut source = solid(80, 40, [255, 255, 255, 255]);
         for y in 0..40 {

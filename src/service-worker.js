@@ -1,13 +1,11 @@
-// Copyright (c) 2026 Witalis Domitrz <witekdomitrz@gmail.com>
-// AGPL License
 // Browser lifecycle/cache plumbing only; all mosaic/app logic remains Rust.
 //
 // Every path is relative to `self.location`, so the app installs and works from
 // whatever subdirectory it is published under.
 //
 // The cache name is content-versioned by `build.rs`, which hashes the bytes of
-// every other shell file - the wasm included - and this template. Change the
-// app, or this caching logic, and the cache name changes with it.
+// the shell files it writes and this template. Change the app's shell, or this
+// caching logic, and the cache name changes with it.
 //
 // There is no `skipWaiting`: an update takes over once the old app's tabs
 // close, so nobody gets a page from one version and a worker from another.

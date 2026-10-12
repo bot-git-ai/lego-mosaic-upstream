@@ -6,7 +6,7 @@ into `./dist` — a front-end-only site any file host can serve, with no server
 and no runtime dependency on the binary. The binary itself is a conversion CLI
 and nothing more. Images are not uploaded or persisted.
 
-AGPL-3.0-only. See `LICENSE`.
+License: AGPL-3.0-only, see LICENSE — source files carry no per-file header.
 
 This is a standalone repository. It was split out of the bot monorepo
 (`bot-git-ai/bot`), which still hosts `bot/`, `cobalt/`, `gateway/` and
@@ -30,9 +30,14 @@ cargo build --release --locked
 ```
 
 Step 1 writes `dist/mosaic.js` and `dist/mosaic_bg.wasm`; step 2 adds the six
-files `build.rs` copies, and derives the service worker's cache version. The
-order matters: step 2's cache hash covers the wasm, so running it first would
-pin a version to whatever the previous build left behind.
+files `build.rs` owns and derives the service worker's cache version from the
+bytes of the shell sources it copies, the two rasterized icons and the
+worker's own template (`build.rs::cache_version`). The order is still the
+discipline — step 2 last — for a weaker reason than the hash: the
+wasm-target `build.rs` run writes nothing by design, so the host build
+finishing last is what leaves `dist/` complete, with the cache version made
+from the sources being published. The wasm is never read by `build.rs`, so a
+wasm-only change does not by itself move the version.
 
 `build.rs` writes only the files it owns, in place. It does not replace
 `dist/`, so it leaves the wasm alone.
@@ -82,9 +87,12 @@ The nine files arrive from two builds:
 - The other four are copied by `build.rs` from committed sources:
   `src/ui.html`, `src/worker.js`, `assets/icon.svg` and
   `src/manifest.webmanifest`. `service-worker.js` is the ninth, with its
-  cache name pinned to a version derived from the bytes of every other file
-  in the directory **and its own source** — so a change to the caching logic
-  invalidates the cache too, and changing the wasm moves the version.
+  cache name pinned to a version derived from the bytes of the files
+  `build.rs` itself writes (its four copies and the two rasterized icons)
+  **plus the worker's own template** — so a change to the caching logic
+  invalidates the cache too. The wasm is *not* in the hash: `build.rs` never
+  reads the `wasm-bindgen` outputs, so changing the wasm alone does not move
+  the version.
 
 `build.rs` writes only the files it owns, each under a scratch name and
 renamed into place, so a host serving `dist/` never sees a half-written file.

@@ -1,6 +1,3 @@
-// Copyright (c) 2026 Witalis Domitrz <witekdomitrz@gmail.com>
-// AGPL License
-
 //! Exact-color previews, vector build guides and parts exports for round
 //! 1×1 tiles (part 98138). Screen swatches are approximate; availability is
 //! not verified. Every output uses the same final mosaic grid.
@@ -20,6 +17,7 @@ use crate::mosaic::Mosaic;
 /// Round-tile preview. `stud` is the tile diameter in px. Small neutral
 /// gaps and a subtle rim depict a smooth round TILE, not a square plate
 /// with an oversized bright stud. Tile faces retain the exact palette RGB.
+#[must_use]
 pub fn stud_svg(mosaic: &Mosaic, stud: u32) -> String {
     let stud = stud.clamp(2, 256);
     let pad = (stud / 8).max(1);
@@ -48,6 +46,7 @@ pub fn stud_svg(mosaic: &Mosaic, stud: u32) -> String {
 
 /// Unshaded square-cell preview, useful for judging conversion quality
 /// without gaps or simulated lighting. The final grid is never modified.
+#[must_use]
 pub fn flat_svg(mosaic: &Mosaic, cell: u32) -> String {
     let cell = cell.clamp(1, 256);
     let mut out = svg_start(
@@ -79,6 +78,7 @@ fn svg_start(width: u32, height: u32, title: &str) -> String {
 /// sections, including partial sections at the top/right. Color numbers
 /// remain stable even when exclusions reorder the effective palette.
 /// The caller chooses SVG download or browser print/PDF scaling/pagination.
+#[must_use]
 pub fn guide_svg(mosaic: &Mosaic, cell: u32) -> String {
     guide_svg_order(mosaic, cell, true)
 }
@@ -87,6 +87,14 @@ pub fn guide_svg(mosaic: &Mosaic, cell: u32) -> String {
 /// row 1 is at the top and 16×16 sections are top-anchored; with `true`,
 /// row 1 and sections are bottom-anchored, matching [`guide_svg`].
 /// Only coordinates and section boundaries change: the picture stays upright.
+///
+/// # Panics
+///
+/// If a mosaic's palette entry vanished between `parts_list` and this
+/// lookup — which cannot happen, since parts are derived from the palette.
+// The guide is one linear SVG assembly; its length tracks its detail.
+#[allow(clippy::too_many_lines)]
+#[must_use]
 pub fn guide_svg_order(mosaic: &Mosaic, cell: u32, bottom_up: bool) -> String {
     let cell = cell.clamp(16, 128);
     let left = cell * 2;
@@ -143,7 +151,7 @@ pub fn guide_svg_order(mosaic: &Mosaic, cell: u32, bottom_up: bool) -> String {
         "Color key / parts needed — numbers are app symbols, not LEGO color IDs",
     );
     for (i, part) in parts.iter().enumerate() {
-        let tile = mosaic
+        let entry = mosaic
             .palette
             .iter()
             .find(|t| t.name == part.name)
@@ -152,7 +160,7 @@ pub fn guide_svg_order(mosaic: &Mosaic, cell: u32, bottom_up: bool) -> String {
         write!(
             out,
             "<rect x=\"{left}\" y=\"{y}\" width=\"20\" height=\"20\" fill=\"{}\" stroke=\"#777\"/>",
-            tile.hex()
+            entry.hex()
         )
         .expect("writing to String cannot fail");
         text(
@@ -161,7 +169,7 @@ pub fn guide_svg_order(mosaic: &Mosaic, cell: u32, bottom_up: bool) -> String {
             y + 15,
             14,
             "start",
-            &format!("{} — {} — {} tiles", tile.symbol(), tile.name, part.count),
+            &format!("{} — {} — {} tiles", entry.symbol(), entry.name, part.count),
         );
     }
     let foot = legend_top + parts.len() as u32 * 26 + 22;
@@ -251,8 +259,7 @@ fn guide_coordinates(out: &mut String, mosaic: &Mosaic, cell: u32, bottom_up: bo
         let row = build_row_number(y, mosaic.height, bottom_up);
         write!(
             out,
-            "<text x=\"-8\" y=\"{cy}\" font-size=\"{font}\" text-anchor=\"end\">{}</text>",
-            row
+            "<text x=\"-8\" y=\"{cy}\" font-size=\"{font}\" text-anchor=\"end\">{row}</text>"
         )
         .expect("writing to String cannot fail");
         text(out, w + 8, cy, font, "start", &row.to_string());
@@ -291,6 +298,12 @@ fn xml_escape(value: &str) -> String {
 
 /// Quoted CSV fields, CRLF records and explicit unverified availability.
 /// This is a design parts count, not a stock check or an order submission.
+///
+/// # Panics
+///
+/// If a mosaic's palette entry vanished between `parts_list` and this
+/// lookup — which cannot happen, since parts are derived from the palette.
+#[must_use]
 pub fn parts_csv(mosaic: &Mosaic) -> String {
     let mut out =
         String::from("Color ID,Symbol,Color,Hex,Quantity,Part,Description,Availability\r\n");
@@ -320,14 +333,12 @@ pub fn parts_csv(mosaic: &Mosaic) -> String {
     out
 }
 
-/// One row of the parts list: color, count.
 pub struct PartCount {
     pub name: String,
     pub hex: String,
     pub count: usize,
 }
 
-/// Per-color tile totals, sorted by count descending.
 pub fn parts_list(mosaic: &Mosaic) -> Vec<PartCount> {
     let mut counts = vec![0_usize; mosaic.palette.len()];
     for &index in &mosaic.grid {
@@ -350,6 +361,7 @@ pub fn parts_list(mosaic: &Mosaic) -> Vec<PartCount> {
 
 /// Build-instruction rows, bottom-up: row 1 is the bottom of the picture,
 /// as a builder places studs from the base upward.
+#[must_use]
 pub fn build_rows(mosaic: &Mosaic) -> Vec<Vec<(String, String)>> {
     build_rows_order(mosaic, true)
 }
@@ -357,6 +369,7 @@ pub fn build_rows(mosaic: &Mosaic) -> Vec<Vec<(String, String)>> {
 /// Per-row (name, hex) pairs in build order, always left to right within a
 /// row. `bottom_up = false` follows the picture top to bottom; `true`
 /// matches [`build_rows`]. The source mosaic is never modified.
+#[must_use]
 pub fn build_rows_order(mosaic: &Mosaic, bottom_up: bool) -> Vec<Vec<(String, String)>> {
     let mut rows = Vec::with_capacity(mosaic.height);
     for row_index in 0..mosaic.height {

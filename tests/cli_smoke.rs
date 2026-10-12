@@ -1,9 +1,8 @@
-// Copyright (c) 2026 Witalis Domitrz <witekdomitrz@gmail.com>
-// AGPL License
 //! External binary regression through the real CLI: a solid 2×2 PNG must
 //! convert to exactly the expected 48×48-stud SVG bytes (default palette,
 //! exact-color mapping, 20 px studs). Ported from `tests/cli_smoke.py`.
 
+use std::fmt::Write as _;
 use std::process::Command;
 
 #[test]
@@ -37,11 +36,13 @@ fn cli_converts_a_solid_png_to_exact_expected_svg_bytes() {
     );
     for y in 0..48 {
         for x in 0..48 {
-            expected.push_str(&format!(
+            write!(
+                expected,
                 r##"<rect x="{}" y="{}" width="20" height="20" fill="#f2f3f2"/>"##,
                 x * 20,
                 y * 20
-            ));
+            )
+            .expect("writing to String cannot fail");
         }
     }
     expected.push_str("</g></svg>");

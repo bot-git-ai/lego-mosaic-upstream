@@ -1,5 +1,3 @@
-// Copyright (c) 2026 Witalis Domitrz <witekdomitrz@gmail.com>
-// AGPL License
 //! End-to-end separator-guard behavior through the real CLI binary.
 //! Guard 0 must reproduce the pre-guard behavior (the narrow white
 //! separator between a dark feature and its gray outline closes); raising

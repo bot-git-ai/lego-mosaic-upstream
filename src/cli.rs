@@ -1,5 +1,3 @@
-// Copyright (c) 2026 Witalis Domitrz <witekdomitrz@gmail.com>
-// AGPL License
 //! Native I/O and argument handling only. Pixel conversion and every SVG/CSV
 //! byte are produced by the same library used by `browser.rs`.
 use lego_mosaic::{HueMode, Options, Order, Raster};
@@ -22,6 +20,24 @@ struct Request {
     stages_dir: Option<PathBuf>,
 }
 
+/// Recursive-merge `patch` into `base` (recipe keys win over defaults).
+fn overlay(base: &mut serde_json::Value, patch: serde_json::Value) {
+    if let (Some(b), Some(p)) = (base.as_object_mut(), patch.as_object()) {
+        for (k, v) in p {
+            if let Some(old) = b.get_mut(k) {
+                overlay(old, v.clone());
+            } else {
+                b.insert(k.clone(), v.clone());
+            }
+        }
+    } else {
+        *base = patch;
+    }
+}
+
+// The parser is a flat sequence of `--flag` handlers, one per option;
+// splitting it would hide the shared `values`/`flags` state in plumbing.
+#[allow(clippy::too_many_lines)]
 fn parse(args: &[String]) -> Result<Request, String> {
     let mut values = BTreeMap::new();
     let mut input = None;
@@ -115,19 +131,6 @@ fn parse(args: &[String]) -> Result<Request, String> {
             return Err("Recipe must be a JSON object of Options".into());
         }
         let mut merged = serde_json::to_value(&options).map_err(|e| e.to_string())?;
-        fn overlay(base: &mut serde_json::Value, patch: serde_json::Value) {
-            if let (Some(b), Some(p)) = (base.as_object_mut(), patch.as_object()) {
-                for (k, v) in p {
-                    if let Some(old) = b.get_mut(k) {
-                        overlay(old, v.clone());
-                    } else {
-                        b.insert(k.clone(), v.clone());
-                    }
-                }
-            } else {
-                *base = patch;
-            }
-        }
         overlay(&mut merged, recipe);
         options = serde_json::from_value(merged).map_err(|e| format!("Recipe Options: {e}"))?;
     }
@@ -188,7 +191,7 @@ fn parse(args: &[String]) -> Result<Request, String> {
         options.dither = false;
     }
     if let Some(id) = values.get("palette") {
-        palette = id.clone();
+        palette.clone_from(id);
     }
     if !lego_mosaic::palettes().iter().any(|p| p.0 == palette) {
         return Err(format!("Unknown palette: {palette}"));
@@ -252,6 +255,8 @@ fn validate_paths(request: &Request) -> Result<(), String> {
     Ok(())
 }
 
+// One flat dispatch: parse, load, convert, emit. Each arm is three lines.
+#[allow(clippy::too_many_lines)]
 pub fn run(args: &[String]) -> Result<(), String> {
     if args == ["--help"] || args == ["-h"] {
         println!("{}", help());
@@ -303,9 +308,15 @@ pub fn run(args: &[String]) -> Result<(), String> {
     for (kind, path) in &req.outputs {
         let bytes = match kind.as_str() {
             "output" if path.extension().is_some_and(|e| e == "png") => {
+                // The raster dimensions come from sanitized options and are
+                // at most a few thousand; they cannot exceed u32 here.
+                #[allow(clippy::cast_possible_truncation)]
                 let mut img = image::RgbaImage::new(mosaic.width as u32, mosaic.height as u32);
                 for (i, &index) in mosaic.grid.iter().enumerate() {
                     let c = mosaic.palette[index].rgb;
+                    // The raster is at most a few thousand pixels wide;
+                    // the index cannot exceed u32 on any supported target.
+                    #[allow(clippy::cast_possible_truncation)]
                     img.put_pixel(
                         (i % mosaic.width) as u32,
                         (i / mosaic.width) as u32,
@@ -346,8 +357,12 @@ pub fn run(args: &[String]) -> Result<(), String> {
             .and_then(|v| v.to_str())
             .unwrap_or("image");
         for (name, raster) in &stage_rasters {
+            // Same by-construction bound as the output raster above.
+            #[allow(clippy::cast_possible_truncation)]
             let mut img = image::RgbaImage::new(raster.width as u32, raster.height as u32);
             for (i, px) in raster.pixels.as_chunks::<4>().0.iter().enumerate() {
+                // Same by-construction bound as the output raster above.
+                #[allow(clippy::cast_possible_truncation)]
                 img.put_pixel(
                     (i % raster.width) as u32,
                     (i / raster.width) as u32,
@@ -386,7 +401,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
 mod tests {
     use super::*;
     fn args(words: &[&str]) -> Vec<String> {
-        words.iter().map(|s| s.to_string()).collect()
+        words.iter().map(std::string::ToString::to_string).collect()
     }
     #[test]
     fn parser_dimensions_and_presets() {

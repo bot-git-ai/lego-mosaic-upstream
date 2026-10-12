@@ -1,6 +1,3 @@
-// Copyright (c) 2026 Witalis Domitrz <witekdomitrz@gmail.com>
-// AGPL License
-
 //! Invariants of the app shell source, of what is and is not committed, and of
 //! the workflow that publishes the site.
 //!
@@ -67,8 +64,7 @@ fn tracked_files() -> Option<String> {
         .args(["rev-parse", "--git-dir"])
         .current_dir(root)
         .output()
-        .map(|out| out.status.success())
-        .unwrap_or(false);
+        .is_ok_and(|out| out.status.success());
     if !inside {
         return None;
     }
@@ -635,7 +631,8 @@ fn the_pages_workflow_builds_the_bindings_under_the_name_the_page_imports() {
 ///
 /// It is the site's whole form, and every entry is load-bearing: the two wasm
 /// artefacts are the studio itself, the worker's cache version is derived from
-/// the bytes of everything else, and the two PNGs are the install icon. The
+/// the bytes of the shell files `build.rs` writes plus its own template, and
+/// the two PNGs are the install icon. The
 /// check is a membership test in both directions, so a file that stops being
 /// built and one that starts being built are both caught.
 ///
@@ -791,9 +788,9 @@ fn the_pages_workflow_installs_the_generator_the_crate_is_pinned_to() {
 
     // And the step must read that variable rather than naming a version of its
     // own, which is how two literals start disagreeing.
-    let live = strip_yaml_comments(&pages);
+    let active = strip_yaml_comments(&pages);
     assert!(
-        live.contains("version=\"$WASM_BINDGEN_VERSION\""),
+        active.contains("version=\"$WASM_BINDGEN_VERSION\""),
         "the generator step must install the version from the env block, not a second literal"
     );
 }
@@ -1083,14 +1080,17 @@ fn the_pages_workflow_publishes_dist_and_never_the_binary() {
         "the second build must force `build.rs` to re-run: it writes into the source tree, so \
          Cargo cannot see its own output change and the site would be left half-built"
     );
-    // `build.rs` derives the worker's cache version from the bytes in `dist/`,
-    // so the order is a correctness requirement, not a habit.
+    // `build.rs` writes the shell and derives the worker's cache version
+    // from its own sources; its wasm-target run writes nothing, so the
+    // documented order (bindings first) is what leaves `dist/` complete.
     let bindings_at = live.find("--out-name mosaic").expect("the bindings step");
     let shell_at = live.find("touch build.rs").expect("the shell build step");
     assert!(
         bindings_at < shell_at,
-        "the bindings must be generated before the host build: build.rs hashes every file in \
-         dist/, the wasm included, to derive the service worker's cache version"
+        "the bindings must be generated before the host build: build.rs hashes only its shell \
+         copies plus the worker template to derive the service worker's cache version (the \
+         wasm is never read), and its wasm-target run writes nothing, so the host build \
+         finishing last is what leaves dist/ complete"
     );
 }
 

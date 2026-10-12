@@ -1,5 +1,3 @@
-# Copyright (c) 2026 Witalis Domitrz <witekdomitrz@gmail.com>
-# AGPL License
 [package]
 name = "lego-mosaic"
 version = "0.3.0"

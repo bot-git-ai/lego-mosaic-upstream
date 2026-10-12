@@ -1,6 +1,3 @@
-// Copyright (c) 2026 Witalis Domitrz <witekdomitrz@gmail.com>
-// AGPL License
-
 //! Browser application. JavaScript is only wasm-bindgen's generated platform
 //! glue; file decoding, DOM events, state, conversion and exports live here.
 
@@ -25,7 +22,6 @@ use crate::{palette, render};
 
 type Shared = Rc<RefCell<App>>;
 
-/// Wire format of the worker's successful reply.
 #[allow(clippy::type_complexity)]
 #[derive(serde::Deserialize)]
 #[serde(untagged)]
@@ -70,7 +66,6 @@ struct App {
     crop: CropUi,
 }
 
-/// Everything the interactive crop frame needs between events.
 #[derive(Default)]
 struct CropUi {
     /// Source-rect frame of the options currently drawn on screen.
@@ -667,7 +662,6 @@ fn blob_url(content: &str, mime: &str) -> Result<String, JsValue> {
     Url::create_object_url_with_blob(&blob)
 }
 
-/// Render optional worker stage rasters into the collapsible stage section.
 fn show_stages(stages: &StagePayload) -> Result<(), JsValue> {
     let payloads = [&stages.0, &stages.1, &stages.2, &stages.3];
     let names = ["fitted", "adjusted", "recolored", "tiles"];
@@ -1233,7 +1227,6 @@ fn crop_gesture_move(state: &Shared, event: &Event) -> Result<(), JsValue> {
     draw_crop_frame(state, &raster, &frame)
 }
 
-/// Gesture finished: drop the drag state and release pointer capture.
 fn crop_gesture_end(state: &Shared, event: &Event) -> Result<(), JsValue> {
     if state.borrow().crop.drag.is_none() {
         return Ok(());
@@ -1514,7 +1507,6 @@ impl CropLayout {
     }
 }
 
-/// The three artifacts the studio can save, sharing one download path.
 #[derive(Clone, Copy)]
 enum Export {
     Mosaic,
@@ -1542,7 +1534,6 @@ fn corner_point(frame: &CropFrame, corner: CropHandle) -> (f64, f64) {
     }
 }
 
-/// The wrap's live position, for pointer mapping.
 fn wrap_rect() -> Result<CropFrame, JsValue> {
     element_rect("crop-wrap")
 }

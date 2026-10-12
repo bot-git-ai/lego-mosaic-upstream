@@ -1,6 +1,3 @@
-// Copyright (c) 2026 Witalis Domitrz <witekdomitrz@gmail.com>
-// AGPL License
-
 //! Write the static app shell to `dist/` while the crate compiles.
 //!
 //! The studio is a browser application, so publishing it is a file copy, not a
@@ -12,9 +9,13 @@
 //!   by a PNG. The two sizes are the same drawing at two resolutions, so
 //!   generating them is what keeps them from drifting into two different icons.
 //! * `service-worker.js` carries a `__VERSION__` placeholder standing for a
-//!   cache name derived from the bytes of every *other* shell file. Deriving
-//!   it here rather than per request is what makes the cache name change
-//!   exactly when the shell does.
+//!   cache name derived from the bytes of the shell files this script writes
+//!   (its four copies and the two rasterized icons) plus the worker's own
+//!   template. Deriving it here rather than per request is what makes the
+//!   cache name change exactly when the shell does. The wasm-bindgen outputs
+//!   are never read — they are not hashed — so the rule that this script's
+//!   host run comes last is the weaker one that it is the only run that
+//!   writes (see `main`).
 //!
 //! Everything is written to `dist/`, which is the whole site and the only copy.
 //! An earlier version also mirrored the files into `OUT_DIR` for the tests, but
@@ -157,8 +158,9 @@ fn leak(name: String) -> &'static str {
     Box::leak(name.into_boxed_str())
 }
 
-/// A cache name derived from the bytes of every shell file, plus the worker's
-/// own template.
+/// A cache name derived from the bytes of the shell files this script writes,
+/// plus the worker's own template. The wasm-bindgen artefacts are never read:
+/// the hash covers only what `main` has in hand.
 fn cache_version(built: &[(&str, Vec<u8>)], worker_template: &str) -> String {
     let mut hasher = DefaultHasher::new();
     for (name, bytes) in built {

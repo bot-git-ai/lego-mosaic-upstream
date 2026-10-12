@@ -1,6 +1,3 @@
-// Copyright (c) 2026 Witalis Domitrz <witekdomitrz@gmail.com>
-// AGPL License
-
 //! The shared core's native front end: one CLI, no server.
 //!
 //! Everything the studio does happens in the browser, in wasm. This binary

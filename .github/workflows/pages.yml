@@ -183,10 +183,10 @@ jobs:
         run: |
           set -eu
           # `build.rs` adds the six files it owns and derives the service
-          # worker's cache version. It must run after the bindings step: the
-          # version is hashed from the bytes of every other file in `dist/`,
-          # the wasm included, so building it first would pin the cache to
-          # whatever the previous build left behind.
+          # worker's cache version from the shell sources it writes plus the
+          # worker's own template (the wasm is never read). It still runs
+          # after the bindings step: its wasm-target run writes nothing, so
+          # the host build finishing last is what leaves the site complete.
           #
           # This host build also builds the `[[bin]]` target, which is why
           # the step is not `--lib`. That is deliberate and matches

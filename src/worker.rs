@@ -1,5 +1,3 @@
-// Copyright (c) 2026 Witalis Domitrz <witekdomitrz@gmail.com>
-// AGPL License
 //! Dedicated-worker protocol. No pixel conversion runs on the window thread.
 use crate::{
     mosaic::{self, Options, Raster},

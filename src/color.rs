@@ -1,6 +1,3 @@
-// Copyright (c) 2026 Witalis Domitrz <witekdomitrz@gmail.com>
-// AGPL License
-
 //! Color science: sRGB → CIELAB conversion and the CIEDE2000 color
 //! difference. Naive RGB nearest-color matching is what makes most mosaic
 //! converters look muddy (midtones collapse into dark gray); matching in a
@@ -21,17 +18,20 @@ pub struct Srgb {
 }
 
 impl Srgb {
+    #[must_use]
     pub const fn new(r: u8, g: u8, b: u8) -> Self {
         Self { r, g, b }
     }
 
     /// Hex string for HTML output (`#f2f3f2`).
+    #[must_use]
     pub fn hex(self) -> String {
         format!("#{:02x}{:02x}{:02x}", self.r, self.g, self.b)
     }
 
     /// sRGB → CIELAB (D65 reference white): inverse companding → linear RGB →
     /// XYZ (D65) → Lab.
+    #[must_use]
     pub fn to_lab(self) -> Lab {
         let [lr, lg, lb] = [
             inverse_compand(f64::from(self.r) / 255.0),
@@ -50,7 +50,6 @@ impl Srgb {
     }
 }
 
-/// A CIELAB color (D65).
 #[derive(Clone, Copy, Debug)]
 pub struct Lab {
     pub l: f64,
@@ -219,7 +218,6 @@ mod tests {
         assert!(delta_e_2000(&base, &near) < delta_e_2000(&base, &far));
     }
 
-    /// Lab triple for the reference table below.
     type LabTriple = (f64, f64, f64);
 
     /// CIEDE2000 reference pairs from Sharma, Wu & Dalal (2005). One pair

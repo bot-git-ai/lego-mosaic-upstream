@@ -1,6 +1,3 @@
-// Copyright (c) 2026 Witalis Domitrz <witekdomitrz@gmail.com>
-// AGPL License
-
 //! Tile palettes. `MOSAIC_MAKER` is the official five (white, two grays,
 //! black, yellow); `MONOCHROME` and `EXTENDED` are design palettes.
 //! Part 98138 is a 1×1 round TILE (smooth top), not a round plate.
@@ -26,7 +23,8 @@ impl TileColor {
         }
     }
 
-    /// Stable app identifier, not an official LEGO or BrickLink color ID.
+    /// Stable app identifier, not an official LEGO or `BrickLink` color ID.
+    #[must_use]
     pub fn id(&self) -> String {
         self.name.to_ascii_lowercase().replace(' ', "-")
     }
@@ -34,6 +32,7 @@ impl TileColor {
     /// Printable app color number, stable across palettes and exclusions.
     /// Canonical extended-palette order must not be changed without migrating
     /// these symbols. New colors should be appended. Unknown colors use `?`.
+    #[must_use]
     pub fn symbol(&self) -> String {
         EXTENDED
             .iter()
@@ -41,6 +40,7 @@ impl TileColor {
             .map_or_else(|| "?".to_string(), |index| format!("{:02}", index + 1))
     }
 
+    #[must_use]
     pub fn hex(&self) -> String {
         self.rgb.hex()
     }
@@ -106,7 +106,7 @@ pub const EXTENDED: &[TileColor] = &[
     TileColor::new("Yellowish Green", 0xE2, 0xF9, 0x92),
 ];
 
-/// All selectable palettes, with the ids used by the API/UI.
+#[must_use]
 pub fn all() -> &'static [(&'static str, &'static str, &'static [TileColor])] {
     &[
         ("mosaic-maker", "Mosaic Maker (5)", MOSAIC_MAKER),
